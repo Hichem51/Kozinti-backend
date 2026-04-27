@@ -3,6 +3,7 @@ const categoryController = require("../controllers/categoryController");
 const validate = require("../middlewares/validate");
 const verifyToken = require("../middlewares/verifyToken");
 
+const categoryIdValidator = require("../validators/Categories/categoryIdValidator");
 const createCategoryValidator = require("../validators/Categories/createCategoryValidator");
 const updateCategoryValidator = require("../validators/Categories/updateCategoryValidator");
 
@@ -10,7 +11,7 @@ const router = express.Router();
 
 
 router.get("/", categoryController.listCategories);
-router.get("/:id", categoryController.getCategory);
+router.get("/:id", categoryIdValidator, validate, categoryController.getCategory);
 
 router.post(
   "/",
@@ -23,6 +24,7 @@ router.post(
 router.put(
   "/:id",
   verifyToken,
+  categoryIdValidator,
   updateCategoryValidator,
   validate,
   categoryController.updateCategory
@@ -31,6 +33,8 @@ router.put(
 router.delete(
   "/:id",
   verifyToken,
+  categoryIdValidator,
+  validate,
   categoryController.deleteCategory
 );
 
