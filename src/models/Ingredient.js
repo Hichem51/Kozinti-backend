@@ -8,10 +8,11 @@ const ingredientSchema = new mongoose.Schema({
     lowercase: true,
     trim: true,
   },
-  unit: {
+  
+  measurement_type: {
     type: String,
-    trim: true,
-    default: "",
+    enum: ["g", "ml", "pcs", "tbsp", "tsp", "cup", "oz", "lb", "l", "mg", "cl", "kg", "leaves"],
+    default: "g",
   },
 });
 
