@@ -12,9 +12,9 @@ const recipeIngredientSchema = new mongoose.Schema({
     required: true,
   },
   quantity: {
-    type: String,
-    trim: true,
-    default: "",
+    type: Number,
+    min: 0,
+    default: 0,
   },
   notes: {
     type: String,
