@@ -7,5 +7,5 @@ const router = express.Router();
 
 router.get("/", ingredientController.listIngredients);
 router.post("/", createIngredientValidator, validate, ingredientController.createIngredient);
-
+router.delete("/:id", ingredientController.deleteIngredient);
 module.exports = router;
