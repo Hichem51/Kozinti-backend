@@ -11,5 +11,6 @@ router.get("/", recipeController.listRecipes);
 router.get("/:id", recipeIdValidator, validate, recipeController.getRecipeById);
 router.post("/", createRecipeValidator, validate, recipeController.createRecipe);
 router.patch("/:id", recipeIdValidator, updateRecipeValidator, validate, recipeController.updateRecipe);
+router.delete("/:id", recipeIdValidator, validate, recipeController.deleteRecipe);
 
 module.exports = router;

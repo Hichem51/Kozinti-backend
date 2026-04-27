@@ -1,9 +1,19 @@
 const mongoose = require("mongoose");
 const Ingredient = require("../models/Ingredient");
+const RecipeIngredient = require("../models/RecipeIngredient");
+
+const sendError = (res, error) => {
+  const statusCode = error.name === "ValidationError" || error.code === 11000 ? 400 : 500;
+
+  res.status(statusCode).json({
+    success: false,
+    message: error.code === 11000 ? "Ingredient already exists" : error.message,
+  });
+};
 
 const listIngredients = async (req, res) => {
   try {
-    const ingredients = await Ingredient.find().sort({ createdAt: -1 });
+    const ingredients = await Ingredient.find().sort({ name: 1 });
 
     res.status(200).json({
       success: true,
@@ -11,10 +21,7 @@ const listIngredients = async (req, res) => {
       data: ingredients,
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    sendError(res, error);
   }
 };
 
@@ -29,30 +36,31 @@ const createIngredient = async (req, res) => {
       });
     }
 
-    if (!unit) {
-      return res.status(400).json({
-        success: false,
-        message: "Unit is required",
-      });
-    }
-    const existing = await Ingredient.findOne({ name });
+    const normalizedName = name.trim().toLowerCase();
+    const existing = await Ingredient.findOne({ name: normalizedName });
+
     if (existing) {
       return res.status(400).json({
         success: false,
         message: "Ingredient already exists",
       });
     }
-    const ingredient = await Ingredient.create({ name, unit });
+
+    const ingredientData = { name: normalizedName };
+
+    if (unit) {
+      ingredientData.unit = unit;
+    }
+
+    const ingredient = await Ingredient.create(ingredientData);
+
     res.status(201).json({
       success: true,
       message: "Ingredient created",
       data: ingredient,
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    sendError(res, error);
   }
 };
 
@@ -64,6 +72,15 @@ const deleteIngredient = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Invalid ingredient ID",
+      });
+    }
+
+    const usedIngredient = await RecipeIngredient.exists({ ingredient_id: id });
+
+    if (usedIngredient) {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot delete ingredient because it is used in recipes",
       });
     }
 
@@ -81,10 +98,7 @@ const deleteIngredient = async (req, res) => {
       message: "Ingredient deleted",
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    sendError(res, error);
   }
 };
 
