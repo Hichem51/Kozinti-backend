@@ -1,5 +1,4 @@
 const Category = require("../models/Category");
-const mongoose = require("mongoose");
 
 const listCategories = async (req, res) => {
   try {
@@ -103,22 +102,7 @@ const updateCategory = async (req, res) => {
         message: "Name is required",
       });
     }
-
-    const slug = slugify(name, { lower: true });
-
-    const category = await Category.findByIdAndUpdate(
-      id,
-      { name, slug },
-      { new: true, runValidators: true }
-    );
-
-    if (!category) {
-      return res.status(404).json({
-        success: false,
-        message: "Category not found",
-      });
-    }
-
+ 
     res.status(200).json({
       success: true,
       message: "Category updated",
