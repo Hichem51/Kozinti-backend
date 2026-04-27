@@ -13,6 +13,11 @@ const ingredientSchema = new mongoose.Schema({
     trim: true,
     default: "",
   },
+  measurement_type: {
+    type: String,
+    enum: ["g", "ml", "pcs", "tbsp", "tsp", "cup", "oz", "lb", "l", "mg", "cl", "kg", "leaves"],
+    default: "g",
+  },
 });
 
 module.exports = mongoose.model("Ingredient", ingredientSchema);
