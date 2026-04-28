@@ -1,11 +1,6 @@
 const mongoose = require("mongoose");
 
 const recipeSchema = new mongoose.Schema({
-  chef_id: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User",
-    required: true,
-  },
   category_id: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Category",
