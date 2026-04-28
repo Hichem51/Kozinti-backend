@@ -3,7 +3,6 @@ const Category = require("../models/Category");
 const Ingredient = require("../models/Ingredient");
 const Recipe = require("../models/Recipe");
 const RecipeIngredient = require("../models/RecipeIngredient");
-const User = require("../models/User");
 const { formatRecipeWithIngredients } = require("../utils/formatRecipe");
 
 const allowedRecipeFields = [
@@ -45,13 +44,11 @@ class RecipeController {
 
   pickRecipeFields(body) {
     const recipeData = {};
-
     allowedRecipeFields.forEach((field) => {
       if (body[field] !== undefined) {
         recipeData[field] = body[field];
       }
     });
-
     return recipeData;
   }
 
@@ -93,7 +90,6 @@ class RecipeController {
     }
 
     const exists = await Model.exists({ _id: id });
-
     if (!exists) {
       throw this.createHttpError(404, notFoundMessage);
     }
@@ -117,9 +113,7 @@ class RecipeController {
 
   async prepareRecipeData(body) {
     const recipeData = this.pickRecipeFields(body);
-
     await this.ensureDocumentExists(Category, recipeData.category_id, "Invalid category ID", "Category not found");
-
     return recipeData;
   }
 
@@ -202,6 +196,7 @@ class RecipeController {
     try {
       const recipeData = await this.prepareRecipeData(req.body);
 
+      // owner = logged-in user
       recipeData.chef_id = req.user.id;
 
       const ingredients = this.normalizeIngredients(req.body.ingredients);
@@ -242,8 +237,9 @@ class RecipeController {
         });
       }
 
+      // 🔐 ownership (admin can override)
       if (
-        req.user.role === "chef" &&
+        req.user.role !== "admin" &&
         existingRecipe.chef_id.toString() !== req.user.id
       ) {
         return res.status(403).json({
@@ -256,13 +252,6 @@ class RecipeController {
       const ingredients = this.normalizeIngredients(req.body.ingredients);
 
       await this.ensureIngredientsExist(ingredients);
-
-      if (Object.keys(recipeData).length === 0 && ingredients === undefined) {
-        return res.status(400).json({
-          success: false,
-          message: "No valid recipe fields were provided",
-        });
-      }
 
       const updatedRecipe =
         Object.keys(recipeData).length > 0
@@ -304,8 +293,9 @@ class RecipeController {
         });
       }
 
+      // 🔐 ownership (admin can override)
       if (
-        req.user.role === "chef" &&
+        req.user.role !== "admin" &&
         recipe.chef_id.toString() !== req.user.id
       ) {
         return res.status(403).json({
