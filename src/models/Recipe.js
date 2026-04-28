@@ -6,10 +6,16 @@ const recipeSchema = new mongoose.Schema({
     ref: "Category",
     required: true,
   },
+  chef_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    required: true,
+  },
   title: {
     type: String,
     required: true,
     trim: true,
+    unique:true,
     maxlength: 140,
   },
   description: {
