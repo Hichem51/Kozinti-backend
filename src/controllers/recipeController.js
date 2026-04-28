@@ -7,7 +7,6 @@ const User = require("../models/User");
 const { formatRecipeWithIngredients } = require("../utils/formatRecipe");
 
 const allowedRecipeFields = [
-  "chef_id",
   "category_id",
   "title",
   "description",
@@ -57,9 +56,7 @@ class RecipeController {
   }
 
   normalizeIngredients(ingredients) {
-    if (ingredients === undefined) {
-      return undefined;
-    }
+    if (ingredients === undefined) return undefined;
 
     if (!Array.isArray(ingredients)) {
       throw this.createHttpError(400, "Ingredients must be an array");
@@ -89,9 +86,7 @@ class RecipeController {
   }
 
   async ensureDocumentExists(Model, id, invalidMessage, notFoundMessage) {
-    if (id === undefined) {
-      return;
-    }
+    if (id === undefined) return;
 
     if (!this.isValidObjectId(id)) {
       throw this.createHttpError(400, invalidMessage);
@@ -105,9 +100,7 @@ class RecipeController {
   }
 
   async ensureIngredientsExist(ingredients) {
-    if (ingredients === undefined || ingredients.length === 0) {
-      return;
-    }
+    if (ingredients === undefined || ingredients.length === 0) return;
 
     const ingredientIds = [...new Set(ingredients.map((item) => item.ingredient_id.toString()))];
 
@@ -125,16 +118,13 @@ class RecipeController {
   async prepareRecipeData(body) {
     const recipeData = this.pickRecipeFields(body);
 
-    await this.ensureDocumentExists(User, recipeData.chef_id, "Invalid chef ID", "Chef not found");
     await this.ensureDocumentExists(Category, recipeData.category_id, "Invalid category ID", "Category not found");
 
     return recipeData;
   }
 
   async createRecipeIngredients(recipeId, ingredients) {
-    if (ingredients === undefined) {
-      return;
-    }
+    if (ingredients === undefined) return;
 
     await RecipeIngredient.create(
       ingredients.map((ingredient) => ({
@@ -147,9 +137,7 @@ class RecipeController {
   }
 
   async replaceRecipeIngredients(recipeId, ingredients) {
-    if (ingredients === undefined) {
-      return;
-    }
+    if (ingredients === undefined) return;
 
     await RecipeIngredient.deleteMany({ recipe_id: recipeId });
     await this.createRecipeIngredients(recipeId, ingredients);
@@ -167,7 +155,9 @@ class RecipeController {
   async listRecipes(req, res) {
     try {
       const recipes = await Recipe.find().sort({ created_at: -1 }).populate(recipePopulate);
-      const recipesWithIngredients = await Promise.all(recipes.map((recipe) => formatRecipeWithIngredients(recipe)));
+      const recipesWithIngredients = await Promise.all(
+        recipes.map((recipe) => formatRecipeWithIngredients(recipe))
+      );
 
       res.status(200).json({
         success: true,
@@ -211,8 +201,10 @@ class RecipeController {
   async createRecipe(req, res) {
     try {
       const recipeData = await this.prepareRecipeData(req.body);
-      const ingredients = this.normalizeIngredients(req.body.ingredients);
 
+      recipeData.chef_id = req.user.id;
+
+      const ingredients = this.normalizeIngredients(req.body.ingredients);
       await this.ensureIngredientsExist(ingredients);
 
       const recipe = await Recipe.create(recipeData);
@@ -241,6 +233,25 @@ class RecipeController {
         });
       }
 
+      const existingRecipe = await Recipe.findById(id);
+
+      if (!existingRecipe) {
+        return res.status(404).json({
+          success: false,
+          message: "Recipe not found",
+        });
+      }
+
+      if (
+        req.user.role === "chef" &&
+        existingRecipe.chef_id.toString() !== req.user.id
+      ) {
+        return res.status(403).json({
+          success: false,
+          message: "You can only update your own recipes",
+        });
+      }
+
       const recipeData = await this.prepareRecipeData(req.body);
       const ingredients = this.normalizeIngredients(req.body.ingredients);
 
@@ -253,7 +264,7 @@ class RecipeController {
         });
       }
 
-      const recipe =
+      const updatedRecipe =
         Object.keys(recipeData).length > 0
           ? await Recipe.findByIdAndUpdate(id, recipeData, {
               new: true,
@@ -261,19 +272,12 @@ class RecipeController {
             }).populate(recipePopulate)
           : await Recipe.findById(id).populate(recipePopulate);
 
-      if (!recipe) {
-        return res.status(404).json({
-          success: false,
-          message: "Recipe not found",
-        });
-      }
-
-      await this.replaceRecipeIngredients(recipe._id, ingredients);
+      await this.replaceRecipeIngredients(updatedRecipe._id, ingredients);
 
       res.status(200).json({
         success: true,
         message: "Recipe updated",
-        data: await formatRecipeWithIngredients(recipe),
+        data: await formatRecipeWithIngredients(updatedRecipe),
       });
     } catch (error) {
       this.sendError(res, error);
@@ -291,7 +295,7 @@ class RecipeController {
         });
       }
 
-      const recipe = await Recipe.findByIdAndDelete(id);
+      const recipe = await Recipe.findById(id);
 
       if (!recipe) {
         return res.status(404).json({
@@ -300,6 +304,17 @@ class RecipeController {
         });
       }
 
+      if (
+        req.user.role === "chef" &&
+        recipe.chef_id.toString() !== req.user.id
+      ) {
+        return res.status(403).json({
+          success: false,
+          message: "You can only delete your own recipes",
+        });
+      }
+
+      await Recipe.findByIdAndDelete(id);
       await RecipeIngredient.deleteMany({ recipe_id: recipe._id });
 
       res.status(200).json({
