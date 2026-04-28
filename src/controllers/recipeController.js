@@ -4,6 +4,7 @@ const Ingredient = require("../models/Ingredient");
 const Recipe = require("../models/Recipe");
 const RecipeIngredient = require("../models/RecipeIngredient");
 const User = require("../models/User");
+const { formatRecipeWithIngredients } = require("../utils/formatRecipe");
 
 const allowedRecipeFields = [
   "chef_id",
@@ -23,11 +24,6 @@ const recipePopulate = [
   { path: "chef_id", select: "name email role" },
   { path: "category_id", select: "name" },
 ];
-
-const recipeIngredientPopulate = {
-  path: "ingredient_id",
-  select: "name unit",
-};
 
 class RecipeController {
   constructor() {
@@ -135,22 +131,6 @@ class RecipeController {
     return recipeData;
   }
 
-  async getRecipeIngredients(recipeId) {
-    return RecipeIngredient.find({ recipe_id: recipeId })
-      .sort({ _id: 1 })
-      .populate(recipeIngredientPopulate);
-  }
-
-  async formatRecipe(recipe) {
-    const recipeObject = recipe.toObject ? recipe.toObject() : recipe;
-    const ingredients = await this.getRecipeIngredients(recipeObject._id);
-
-    return {
-      ...recipeObject,
-      ingredients,
-    };
-  }
-
   async createRecipeIngredients(recipeId, ingredients) {
     if (ingredients === undefined) {
       return;
@@ -187,7 +167,7 @@ class RecipeController {
   async listRecipes(req, res) {
     try {
       const recipes = await Recipe.find().sort({ created_at: -1 }).populate(recipePopulate);
-      const recipesWithIngredients = await Promise.all(recipes.map((recipe) => this.formatRecipe(recipe)));
+      const recipesWithIngredients = await Promise.all(recipes.map((recipe) => formatRecipeWithIngredients(recipe)));
 
       res.status(200).json({
         success: true,
@@ -221,7 +201,7 @@ class RecipeController {
 
       res.status(200).json({
         success: true,
-        data: await this.formatRecipe(recipe),
+        data: await formatRecipeWithIngredients(recipe),
       });
     } catch (error) {
       this.sendError(res, error);
@@ -243,7 +223,7 @@ class RecipeController {
       res.status(201).json({
         success: true,
         message: "Recipe created",
-        data: await this.formatRecipe(populatedRecipe),
+        data: await formatRecipeWithIngredients(populatedRecipe),
       });
     } catch (error) {
       this.sendError(res, error);
@@ -293,7 +273,7 @@ class RecipeController {
       res.status(200).json({
         success: true,
         message: "Recipe updated",
-        data: await this.formatRecipe(recipe),
+        data: await formatRecipeWithIngredients(recipe),
       });
     } catch (error) {
       this.sendError(res, error);

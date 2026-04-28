@@ -40,7 +40,6 @@ const recipeSchema = new mongoose.Schema({
   total_time: {
     type: Number,
     min: 0,
-    hours: 0,
   },
 
   portions: {
@@ -66,10 +65,6 @@ const recipeSchema = new mongoose.Schema({
       required: true,
     },
     Fibers: {
-      type: Number,
-      required: true,
-    },
-    Calories: {
       type: Number,
       required: true,
     },

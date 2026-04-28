@@ -47,7 +47,7 @@ app.get("/", (req, res) => {
       { method: "GET", path: "/recipes", description: "List recipes scaffold" },
       { method: "GET", path: "/categories", description: "List categories scaffold" },
       { method: "GET", path: "/ingredients", description: "List ingredients scaffold" },
-      { method: "GET", path: "/favorites", description: "List favorites scaffold" },
+      { method: "GET", path: "/favorites", description: "List the authenticated user's favorites" },
     ],
   });
 });
