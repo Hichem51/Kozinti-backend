@@ -3,6 +3,7 @@ const Category = require("../models/Category");
 const Ingredient = require("../models/Ingredient");
 const Recipe = require("../models/Recipe");
 const RecipeIngredient = require("../models/RecipeIngredient");
+const User = require("../models/User");
 const { formatRecipeWithIngredients } = require("../utils/formatRecipe");
 
 const allowedRecipeFields = [
@@ -42,13 +43,19 @@ class RecipeController {
     return mongoose.Types.ObjectId.isValid(id);
   }
 
+  escapeRegex(value) {
+    return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
   pickRecipeFields(body) {
     const recipeData = {};
+
     allowedRecipeFields.forEach((field) => {
       if (body[field] !== undefined) {
         recipeData[field] = body[field];
       }
     });
+
     return recipeData;
   }
 
@@ -90,6 +97,7 @@ class RecipeController {
     }
 
     const exists = await Model.exists({ _id: id });
+
     if (!exists) {
       throw this.createHttpError(404, notFoundMessage);
     }
@@ -111,9 +119,25 @@ class RecipeController {
     }
   }
 
+  async ensureRecipeTitleIsUnique(title, excludedRecipeId) {
+    if (title === undefined) return;
+
+    const normalizedTitle = String(title).trim();
+    const existingRecipe = await Recipe.findOne({
+      title: new RegExp(`^${this.escapeRegex(normalizedTitle)}$`, "i"),
+      ...(excludedRecipeId ? { _id: { $ne: excludedRecipeId } } : {}),
+    });
+
+    if (existingRecipe) {
+      throw this.createHttpError(409, "Recipe title already exists");
+    }
+  }
+
   async prepareRecipeData(body) {
     const recipeData = this.pickRecipeFields(body);
+
     await this.ensureDocumentExists(Category, recipeData.category_id, "Invalid category ID", "Category not found");
+
     return recipeData;
   }
 
@@ -138,11 +162,11 @@ class RecipeController {
   }
 
   sendError(res, error) {
-    const statusCode = error.statusCode || (error.name === "ValidationError" ? 400 : 500);
+    const statusCode = error.statusCode || (error.name === "ValidationError" ? 400 : error.code === 11000 ? 409 : 500);
 
     res.status(statusCode).json({
       success: false,
-      message: error.message,
+      message: error.code === 11000 ? "Recipe title already exists" : error.message,
     });
   }
 
@@ -196,11 +220,11 @@ class RecipeController {
     try {
       const recipeData = await this.prepareRecipeData(req.body);
 
-      // owner = logged-in user
       recipeData.chef_id = req.user.id;
 
       const ingredients = this.normalizeIngredients(req.body.ingredients);
       await this.ensureIngredientsExist(ingredients);
+      await this.ensureRecipeTitleIsUnique(recipeData.title);
 
       const recipe = await Recipe.create(recipeData);
       await this.createRecipeIngredients(recipe._id, ingredients);
@@ -237,9 +261,8 @@ class RecipeController {
         });
       }
 
-      // 🔐 ownership (admin can override)
       if (
-        req.user.role !== "admin" &&
+        req.user.role === "chef" &&
         existingRecipe.chef_id.toString() !== req.user.id
       ) {
         return res.status(403).json({
@@ -252,6 +275,14 @@ class RecipeController {
       const ingredients = this.normalizeIngredients(req.body.ingredients);
 
       await this.ensureIngredientsExist(ingredients);
+      await this.ensureRecipeTitleIsUnique(recipeData.title, id);
+
+      if (Object.keys(recipeData).length === 0 && ingredients === undefined) {
+        return res.status(400).json({
+          success: false,
+          message: "No valid recipe fields were provided",
+        });
+      }
 
       const updatedRecipe =
         Object.keys(recipeData).length > 0
@@ -293,9 +324,8 @@ class RecipeController {
         });
       }
 
-      // 🔐 ownership (admin can override)
       if (
-        req.user.role !== "admin" &&
+        req.user.role === "chef" &&
         recipe.chef_id.toString() !== req.user.id
       ) {
         return res.status(403).json({

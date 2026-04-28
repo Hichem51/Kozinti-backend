@@ -11,11 +11,6 @@ const nutritionalValueValidator = (field) =>
     .withMessage(`${field} must be a positive number`);
 
 module.exports = [
-  body("chef_id")
-    .notEmpty()
-    .withMessage("Chef id is required")
-    .isMongoId()
-    .withMessage("Chef id must be a valid MongoDB id"),
   body("category_id")
     .notEmpty()
     .withMessage("Category id is required")
