@@ -36,7 +36,6 @@ const recipeSchema = new mongoose.Schema({
   prep_time: {
     type: Number,
     min: 0,
-    hours: 0,
   },
   total_time: {
     type: Number,
