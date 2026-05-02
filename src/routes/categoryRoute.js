@@ -10,11 +10,11 @@ const updateCategoryValidator = require("../validators/Categories/updateCategory
 
 const router = express.Router();
 
-// ✅ Public
+// Public
 router.get("/", categoryController.listCategories);
 router.get("/:id", categoryIdValidator, validate, categoryController.getCategory);
 
-// 🔒 Admin only
+// Admin only
 router.post(
   "/",
   verifyToken,

@@ -2,7 +2,7 @@ const { body } = require("express-validator");
 
 module.exports = [
   body("name")
-    .optional()
+    .required()
     .trim()
     .notEmpty()
     .withMessage("Category name cannot be empty")

@@ -40,7 +40,6 @@ module.exports = [
   nutritionalValueValidator("Fats"),
   nutritionalValueValidator("Carbohydrates"),
   nutritionalValueValidator("Fibers"),
-  nutritionalValueValidator("Calories"),
   body("Reviews").optional().isArray().withMessage("Reviews must be an array"),
   body("Reviews.*.user_id").optional().isMongoId().withMessage("Review user id must be a valid MongoDB id"),
   body("Reviews.*.rating").optional().isInt({ min: 1, max: 5 }).withMessage("Review rating must be between 1 and 5"),

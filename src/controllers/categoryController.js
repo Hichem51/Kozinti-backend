@@ -1,7 +1,30 @@
 const Category = require("../models/Category");
+const createError = require("../utils/createError");
 
 class CategoryController {
-  async listCategories(req, res) {
+  constructor() {
+    this.listCategories = this.listCategories.bind(this);
+    this.getCategory = this.getCategory.bind(this);
+    this.createCategory = this.createCategory.bind(this);
+    this.updateCategory = this.updateCategory.bind(this);
+    this.deleteCategory = this.deleteCategory.bind(this);
+  }
+
+  normalizeError(error) {
+    if (error.statusCode) return error;
+
+    if (error.name === "ValidationError") {
+      return createError(400, error.message);
+    }
+
+    if (error.code === 11000) {
+      return createError(409, "Category already exists");
+    }
+
+    return error;
+  }
+
+  async listCategories(req, res, next) {
     try {
       const categories = await Category.find().sort({ name: 1 });
 
@@ -11,24 +34,18 @@ class CategoryController {
         data: categories,
       });
     } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: error.message,
-      });
+      next(this.normalizeError(error));
     }
   }
 
-  async getCategory(req, res) {
+  async getCategory(req, res, next) {
     try {
       const { id } = req.params;
 
       const category = await Category.findById(id);
 
       if (!category) {
-        return res.status(404).json({
-          success: false,
-          message: "Category not found",
-        });
+        return next(createError(404, "Category not found"));
       }
 
       res.status(200).json({
@@ -36,30 +53,21 @@ class CategoryController {
         data: category,
       });
     } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: error.message,
-      });
+      next(this.normalizeError(error));
     }
   }
 
-  async createCategory(req, res) {
+  async createCategory(req, res, next) {
     try {
       const { name } = req.body;
 
       if (!name) {
-        return res.status(400).json({
-          success: false,
-          message: "Name is required",
-        });
+        return next(createError(400, "Name is required"));
       }
 
       const existing = await Category.findOne({ name });
       if (existing) {
-        return res.status(400).json({
-          success: false,
-          message: "Category already exists",
-        });
+        return next(createError(409, "Category already exists"));
       }
 
       const category = await Category.create({ name });
@@ -69,23 +77,17 @@ class CategoryController {
         data: category,
       });
     } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: error.message,
-      });
+      next(this.normalizeError(error));
     }
   }
 
-  async updateCategory(req, res) {
+  async updateCategory(req, res, next) {
     try {
       const { id } = req.params;
       const { name } = req.body;
 
       if (!name) {
-        return res.status(400).json({
-          success: false,
-          message: "Name is required",
-        });
+        return next(createError(400, "Name is required"));
       }
 
       const category = await Category.findByIdAndUpdate(
@@ -98,10 +100,7 @@ class CategoryController {
       );
 
       if (!category) {
-        return res.status(404).json({
-          success: false,
-          message: "Category not found",
-        });
+        return next(createError(404, "Category not found"));
       }
 
       res.status(200).json({
@@ -110,24 +109,18 @@ class CategoryController {
         data: category,
       });
     } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: error.message,
-      });
+      next(this.normalizeError(error));
     }
   }
 
-  async deleteCategory(req, res) {
+  async deleteCategory(req, res, next) {
     try {
       const { id } = req.params;
 
       const category = await Category.findByIdAndDelete(id);
 
       if (!category) {
-        return res.status(404).json({
-          success: false,
-          message: "Category not found",
-        });
+        return next(createError(404, "Category not found"));
       }
 
       res.status(200).json({
@@ -135,10 +128,7 @@ class CategoryController {
         message: "Category deleted",
       });
     } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: error.message,
-      });
+      next(this.normalizeError(error));
     }
   }
 }

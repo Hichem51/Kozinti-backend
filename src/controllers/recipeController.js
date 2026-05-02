@@ -3,7 +3,6 @@ const Category = require("../models/Category");
 const Ingredient = require("../models/Ingredient");
 const Recipe = require("../models/Recipe");
 const RecipeIngredient = require("../models/RecipeIngredient");
-const User = require("../models/User");
 const { formatRecipeWithIngredients } = require("../utils/formatRecipe");
 
 const allowedRecipeFields = [
@@ -161,16 +160,21 @@ class RecipeController {
     await this.createRecipeIngredients(recipeId, ingredients);
   }
 
-  sendError(res, error) {
-    const statusCode = error.statusCode || (error.name === "ValidationError" ? 400 : error.code === 11000 ? 409 : 500);
+  normalizeError(error) {
+    if (error.statusCode) return error;
 
-    res.status(statusCode).json({
-      success: false,
-      message: error.code === 11000 ? "Recipe title already exists" : error.message,
-    });
+    if (error.name === "ValidationError") {
+      return this.createHttpError(400, error.message);
+    }
+
+    if (error.code === 11000) {
+      return this.createHttpError(409, "Recipe title already exists");
+    }
+
+    return error;
   }
 
-  async listRecipes(req, res) {
+  async listRecipes(req, res, next) {
     try {
       const recipes = await Recipe.find().sort({ created_at: -1 }).populate(recipePopulate);
       const recipesWithIngredients = await Promise.all(
@@ -183,11 +187,11 @@ class RecipeController {
         data: recipesWithIngredients,
       });
     } catch (error) {
-      this.sendError(res, error);
+      next(this.normalizeError(error));
     }
   }
 
-  async getRecipeById(req, res) {
+  async getRecipeById(req, res, next) {
     try {
       const { id } = req.params;
 
@@ -212,11 +216,11 @@ class RecipeController {
         data: await formatRecipeWithIngredients(recipe),
       });
     } catch (error) {
-      this.sendError(res, error);
+      next(this.normalizeError(error));
     }
   }
 
-  async createRecipe(req, res) {
+  async createRecipe(req, res, next) {
     try {
       const recipeData = await this.prepareRecipeData(req.body);
 
@@ -237,11 +241,11 @@ class RecipeController {
         data: await formatRecipeWithIngredients(populatedRecipe),
       });
     } catch (error) {
-      this.sendError(res, error);
+      next(this.normalizeError(error));
     }
   }
 
-  async updateRecipe(req, res) {
+  async updateRecipe(req, res, next) {
     try {
       const { id } = req.params;
 
@@ -300,11 +304,11 @@ class RecipeController {
         data: await formatRecipeWithIngredients(updatedRecipe),
       });
     } catch (error) {
-      this.sendError(res, error);
+      next(this.normalizeError(error));
     }
   }
 
-  async deleteRecipe(req, res) {
+  async deleteRecipe(req, res, next) {
     try {
       const { id } = req.params;
 
@@ -342,7 +346,7 @@ class RecipeController {
         message: "Recipe deleted",
       });
     } catch (error) {
-      this.sendError(res, error);
+      next(this.normalizeError(error));
     }
   }
 }

@@ -1,18 +1,24 @@
 const mongoose = require("mongoose");
 const Ingredient = require("../models/Ingredient");
 const RecipeIngredient = require("../models/RecipeIngredient");
+const createError = require("../utils/createError");
 
 class IngredientController {
-  sendError(res, error) {
-    const statusCode = error.name === "ValidationError" || error.code === 11000 ? 400 : 500;
+  normalizeError(error) {
+    if (error.statusCode) return error;
 
-    res.status(statusCode).json({
-      success: false,
-      message: error.code === 11000 ? "Ingredient already exists" : error.message,
-    });
+    if (error.name === "ValidationError") {
+      return createError(400, error.message);
+    }
+
+    if (error.code === 11000) {
+      return createError(409, "Ingredient already exists");
+    }
+
+    return error;
   }
 
-  async listIngredients(req, res) {
+  async listIngredients(req, res, next) {
     try {
       const ingredients = await Ingredient.find().sort({ name: 1 });
 
@@ -22,29 +28,23 @@ class IngredientController {
         data: ingredients,
       });
     } catch (error) {
-      this.sendError(res, error);
+      next(this.normalizeError(error));
     }
   }
 
-  async createIngredient(req, res) {
+  async createIngredient(req, res, next) {
     try {
       const { name, unit } = req.body;
 
       if (!name) {
-        return res.status(400).json({
-          success: false,
-          message: "Name is required",
-        });
+        return next(createError(400, "Name is required"));
       }
 
       const normalizedName = name.trim().toLowerCase();
       const existing = await Ingredient.findOne({ name: normalizedName });
 
       if (existing) {
-        return res.status(400).json({
-          success: false,
-          message: "Ingredient already exists",
-        });
+        return next(createError(409, "Ingredient already exists"));
       }
 
       const ingredientData = { name: normalizedName };
@@ -61,37 +61,28 @@ class IngredientController {
         data: ingredient,
       });
     } catch (error) {
-      this.sendError(res, error);
+      next(this.normalizeError(error));
     }
   }
 
-  async deleteIngredient(req, res) {
+  async deleteIngredient(req, res, next) {
     try {
       const { id } = req.params;
 
       if (!mongoose.Types.ObjectId.isValid(id)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid ingredient ID",
-        });
+        return next(createError(400, "Invalid ingredient ID"));
       }
 
       const usedIngredient = await RecipeIngredient.exists({ ingredient_id: id });
 
       if (usedIngredient) {
-        return res.status(400).json({
-          success: false,
-          message: "Cannot delete ingredient because it is used in recipes",
-        });
+        return next(createError(400, "Cannot delete ingredient because it is used in recipes"));
       }
 
       const ingredient = await Ingredient.findByIdAndDelete(id);
 
       if (!ingredient) {
-        return res.status(404).json({
-          success: false,
-          message: "Ingredient not found",
-        });
+        return next(createError(404, "Ingredient not found"));
       }
 
       res.status(200).json({
@@ -99,7 +90,7 @@ class IngredientController {
         message: "Ingredient deleted",
       });
     } catch (error) {
-      this.sendError(res, error);
+      next(this.normalizeError(error));
     }
   }
 }
