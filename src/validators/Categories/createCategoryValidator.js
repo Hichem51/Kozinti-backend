@@ -2,6 +2,7 @@ const { body } = require("express-validator");
 
 module.exports = [
   body("name")
+    .exists()
     .trim()
     .notEmpty()
     .withMessage("Category name is required")

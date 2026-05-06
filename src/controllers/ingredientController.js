@@ -2,6 +2,11 @@ const mongoose = require("mongoose");
 const Ingredient = require("../models/Ingredient");
 const RecipeIngredient = require("../models/RecipeIngredient");
 const createError = require("../utils/createError");
+const {
+  escapeRegex,
+  getPagination,
+  getPaginationMeta,
+} = require("../utils/queryHelpers");
 
 class IngredientController {
   normalizeError(error) {
@@ -20,11 +25,34 @@ class IngredientController {
 
   async listIngredients(req, res, next) {
     try {
-      const ingredients = await Ingredient.find().sort({ name: 1 });
+      const filter = {};
+      const search = req.query.search || req.query.q || req.query.name;
+
+      if (search) {
+        filter.name = new RegExp(escapeRegex(String(search).trim().toLowerCase()), "i");
+      }
+
+      if (req.query.unit) {
+        filter.unit = String(req.query.unit).trim().toLowerCase();
+      }
+
+      const shouldPaginate = req.query.page !== undefined || req.query.limit !== undefined;
+      const { page, limit, skip } = getPagination(req.query, { defaultLimit: 50 });
+      const query = Ingredient.find(filter).sort({ name: 1 });
+
+      if (shouldPaginate) {
+        query.skip(skip).limit(limit);
+      }
+
+      const [total, ingredients] = await Promise.all([
+        Ingredient.countDocuments(filter),
+        query,
+      ]);
 
       res.status(200).json({
         success: true,
         count: ingredients.length,
+        ...(shouldPaginate ? { pagination: getPaginationMeta(total, page, limit, ingredients.length) } : {}),
         data: ingredients,
       });
     } catch (error) {

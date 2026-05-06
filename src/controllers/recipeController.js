@@ -4,6 +4,12 @@ const Ingredient = require("../models/Ingredient");
 const Recipe = require("../models/Recipe");
 const RecipeIngredient = require("../models/RecipeIngredient");
 const { formatRecipeWithIngredients } = require("../utils/formatRecipe");
+const {
+  escapeRegex,
+  getPagination,
+  getPaginationMeta,
+  parseNumber,
+} = require("../utils/queryHelpers");
 
 const allowedRecipeFields = [
   "category_id",
@@ -43,7 +49,7 @@ class RecipeController {
   }
 
   escapeRegex(value) {
-    return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return escapeRegex(value);
   }
 
   pickRecipeFields(body) {
@@ -174,9 +180,122 @@ class RecipeController {
     return error;
   }
 
+  addNumberRangeFilter(filter, field, minValue, maxValue) {
+    const min = parseNumber(minValue);
+    const max = parseNumber(maxValue);
+
+    if (min === undefined && max === undefined) return;
+
+    filter[field] = {
+      ...(min !== undefined ? { $gte: min } : {}),
+      ...(max !== undefined ? { $lte: max } : {}),
+    };
+  }
+
+  getRecipeSort(sort) {
+    const sortOptions = {
+      newest: { created_at: -1 },
+      oldest: { created_at: 1 },
+      title: { title: 1 },
+      "title-desc": { title: -1 },
+      prep_time: { prep_time: 1 },
+      "prep_time-desc": { prep_time: -1 },
+      total_time: { total_time: 1 },
+      "total_time-desc": { total_time: -1 },
+      calories: { "Nutritional_values.calories": 1 },
+      "calories-desc": { "Nutritional_values.calories": -1 },
+    };
+
+    return sortOptions[sort] || sortOptions.newest;
+  }
+
+  async buildRecipeFilter(query) {
+    const filter = {};
+    const search = query.search || query.q;
+
+    if (search) {
+      const regex = new RegExp(this.escapeRegex(String(search).trim()), "i");
+      filter.$or = [{ title: regex }, { description: regex }];
+    }
+
+    if (query.category_id || query.categoryId) {
+      const categoryId = query.category_id || query.categoryId;
+
+      if (!this.isValidObjectId(categoryId)) {
+        throw this.createHttpError(400, "Invalid category ID");
+      }
+
+      filter.category_id = categoryId;
+    } else if (query.category) {
+      if (this.isValidObjectId(query.category)) {
+        filter.category_id = query.category;
+      } else {
+        const categories = await Category.find({
+          name: new RegExp(this.escapeRegex(String(query.category).trim()), "i"),
+        }).select("_id");
+
+        filter.category_id = { $in: categories.map((category) => category._id) };
+      }
+    }
+
+    if (query.chef_id || query.chefId) {
+      const chefId = query.chef_id || query.chefId;
+
+      if (!this.isValidObjectId(chefId)) {
+        throw this.createHttpError(400, "Invalid chef ID");
+      }
+
+      filter.chef_id = chefId;
+    }
+
+    if (query.difficulty) {
+      const normalizedDifficulty = String(query.difficulty).trim().toLowerCase();
+      const difficultyMap = {
+        easy: "Easy",
+        medium: "Medium",
+        hard: "Hard",
+      };
+
+      if (!difficultyMap[normalizedDifficulty]) {
+        throw this.createHttpError(400, "Difficulty must be Easy, Medium, or Hard");
+      }
+
+      filter.difficulty = difficultyMap[normalizedDifficulty];
+    }
+
+    if (query.portions) {
+      const portions = parseNumber(query.portions);
+
+      if (portions === undefined) {
+        throw this.createHttpError(400, "Portions must be a number");
+      }
+
+      filter.portions = portions;
+    }
+
+    this.addNumberRangeFilter(filter, "prep_time", query.min_prep_time || query.minPrepTime, query.max_prep_time || query.maxPrepTime);
+    this.addNumberRangeFilter(filter, "total_time", query.min_total_time || query.minTotalTime, query.max_total_time || query.maxTotalTime);
+    this.addNumberRangeFilter(filter, "Nutritional_values.calories", query.min_calories || query.minCalories, query.max_calories || query.maxCalories);
+    this.addNumberRangeFilter(filter, "Nutritional_values.proteins", query.min_proteins || query.minProteins, query.max_proteins || query.maxProteins);
+    this.addNumberRangeFilter(filter, "Nutritional_values.Fats", query.min_fats || query.minFats, query.max_fats || query.maxFats);
+    this.addNumberRangeFilter(filter, "Nutritional_values.Carbohydrates", query.min_carbohydrates || query.minCarbohydrates, query.max_carbohydrates || query.maxCarbohydrates);
+    this.addNumberRangeFilter(filter, "Nutritional_values.Fibers", query.min_fibers || query.minFibers, query.max_fibers || query.maxFibers);
+
+    return filter;
+  }
+
   async listRecipes(req, res, next) {
     try {
-      const recipes = await Recipe.find().sort({ created_at: -1 }).populate(recipePopulate);
+      const filter = await this.buildRecipeFilter(req.query);
+      const { page, limit, skip } = getPagination(req.query);
+      const [total, recipes] = await Promise.all([
+        Recipe.countDocuments(filter),
+        Recipe.find(filter)
+          .sort(this.getRecipeSort(req.query.sort))
+          .skip(skip)
+          .limit(limit)
+          .populate(recipePopulate),
+      ]);
       const recipesWithIngredients = await Promise.all(
         recipes.map((recipe) => formatRecipeWithIngredients(recipe))
       );
@@ -184,6 +303,7 @@ class RecipeController {
       res.status(200).json({
         success: true,
         count: recipesWithIngredients.length,
+        pagination: getPaginationMeta(total, page, limit, recipesWithIngredients.length),
         data: recipesWithIngredients,
       });
     } catch (error) {
