@@ -1,5 +1,10 @@
 const Category = require("../models/Category");
 const createError = require("../utils/createError");
+const {
+  escapeRegex,
+  getPagination,
+  getPaginationMeta,
+} = require("../utils/queryHelpers");
 
 class CategoryController {
   constructor() {
@@ -26,11 +31,30 @@ class CategoryController {
 
   async listCategories(req, res, next) {
     try {
-      const categories = await Category.find().sort({ name: 1 });
+      const filter = {};
+      const search = req.query.search || req.query.q;
+
+      if (search) {
+        filter.name = new RegExp(escapeRegex(String(search).trim()), "i");
+      }
+
+      const shouldPaginate = req.query.page !== undefined || req.query.limit !== undefined;
+      const { page, limit, skip } = getPagination(req.query, { defaultLimit: 20 });
+      const query = Category.find(filter).sort({ name: 1 });
+
+      if (shouldPaginate) {
+        query.skip(skip).limit(limit);
+      }
+
+      const [total, categories] = await Promise.all([
+        Category.countDocuments(filter),
+        query,
+      ]);
 
       res.status(200).json({
         success: true,
         count: categories.length,
+        ...(shouldPaginate ? { pagination: getPaginationMeta(total, page, limit, categories.length) } : {}),
         data: categories,
       });
     } catch (error) {
